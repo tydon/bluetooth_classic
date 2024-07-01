@@ -180,6 +180,7 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
       )
       "disconnect" -> disconnect(result)
       "write" -> write(result, call.argument<String>("message")!!)
+      "writeBytes" -> writeBytes(result, call.argument<List<Int>>("message")!!)
       else -> result.notImplemented()
     }
   }
@@ -188,6 +189,17 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
     Log.i("write_handle", "inside write handle")
     if (thread != null) {
       thread!!.write(message.toByteArray())
+      result.success(true)
+    } else {
+      result.error("write_impossible", "could not send message to unconnected device", null)
+    }
+  }
+
+  private fun writeBytes(result: Result, bytes: List<Int>) {
+    Log.i("write_handle", "inside write handle")
+    if (thread != null) {
+      val byteArray = ByteArray(bytes.size) { i -> bytes[i].toByte() }
+      thread!!.write(byteArray)
       result.success(true)
     } else {
       result.error("write_impossible", "could not send message to unconnected device", null)
