@@ -27,51 +27,51 @@ abstract class BluetoothClassicPlatform extends PlatformInterface {
   }
 
   Future<String?> getPlatformVersion() {
-    throw UnimplementedError('platformVersion() has not been implemented.');
+    throw UnimplementedError("platformVersion() has not been implemented.");
   }
 
   Future<List<Device>> getPairedDevices() {
-    throw UnimplementedError('getPairedDevices() has not been implemented.');
+    throw UnimplementedError("getPairedDevices() has not been implemented.");
   }
 
   Future<bool> initPermissions() {
-    throw UnimplementedError('initPermissions() has not been implemented.');
+    throw UnimplementedError("initPermissions() has not been implemented.");
   }
 
   Future<bool> startScan() {
-    throw UnimplementedError('startScan() has not been implemented.');
+    throw UnimplementedError("startScan() has not been implemented.");
   }
 
   Future<bool> stopScan() {
-    throw UnimplementedError('stopScan() has not been implemented.');
+    throw UnimplementedError("stopScan() has not been implemented.");
   }
 
   Stream<Device> onDeviceDiscovered() {
-    throw UnimplementedError('onDeviceDiscovered() has not been implemented.');
+    throw UnimplementedError("onDeviceDiscovered() has not been implemented.");
   }
 
   Stream<int> onDeviceStatusChanged() {
-    throw UnimplementedError('onDeviceStatus() has not been implemented.');
+    throw UnimplementedError("onDeviceStatus() has not been implemented.");
   }
 
   Stream<Uint8List> onDeviceDataReceived() {
     throw UnimplementedError(
-        'onDeviceDataReceived() has not been implemented.');
+        "onDeviceDataReceived() has not been implemented.");
   }
 
   Future<bool> connect(String address, String serviceUUID) {
-    throw UnimplementedError('connect() has not been implemented.');
+    throw UnimplementedError("connect() has not been implemented.");
   }
 
   Future<bool> disconnect() {
-    throw UnimplementedError('disconnect() has not been implemented.');
+    throw UnimplementedError("disconnect() has not been implemented.");
   }
 
   Future<bool> write(String message) {
-    throw UnimplementedError('write() has not been implemented.');
+    throw UnimplementedError("write() has not been implemented.");
   }
 
   Future<bool> writeBytes(List<int> message) {
-    throw UnimplementedError('write() has not been implemented.');
+    throw UnimplementedError("write() has not been implemented.");
   }
 }
