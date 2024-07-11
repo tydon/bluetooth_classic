@@ -11,7 +11,7 @@ class MethodChannelBluetoothClassic extends BluetoothClassicPlatform {
   /// The method channel used to interact with the native platform.
   @visibleForTesting
   final methodChannel =
-      const MethodChannel('com.matteogassend/bluetooth_classic');
+      const MethodChannel("com.matteogassend/bluetooth_classic");
 
   /// The event channel used to receive discovered devices events
   final deviceDiscoveryChannel =
@@ -52,7 +52,7 @@ class MethodChannelBluetoothClassic extends BluetoothClassicPlatform {
   @override
   Future<String?> getPlatformVersion() async {
     final version =
-        await methodChannel.invokeMethod<String>('getPlatformVersion');
+        await methodChannel.invokeMethod<String>("getPlatformVersion");
     return version;
   }
 

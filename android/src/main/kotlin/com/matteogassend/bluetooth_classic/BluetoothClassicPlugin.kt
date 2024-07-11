@@ -96,7 +96,7 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
       } catch (e: IOException) {
         readStream = false
         android.util.Log.e("Bluetooth Write", "could not send data to other device", e)
-        Handler(looper).post { publishBluetoothStatus(0) }
+        Handler(Looper.getMainLooper()).post { publishBluetoothStatus(0) }
       }
     }
   }
