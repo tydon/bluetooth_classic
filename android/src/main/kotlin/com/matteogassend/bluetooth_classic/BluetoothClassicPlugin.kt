@@ -62,6 +62,7 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
 
     private val inputStream = socket.inputStream
     private val outputStream = socket.outputStream
+    private val buffer: ByteArray = ByteArray(1024)
     var readStream = true
     override fun run() {
       var numBytes: Int
@@ -95,7 +96,7 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
       } catch (e: IOException) {
         readStream = false
         android.util.Log.e("Bluetooth Write", "could not send data to other device", e)
-        Handler(Looper.getMainLooper()).post { publishBluetoothStatus(0) }
+        Handler(looper).post { publishBluetoothStatus(0) }
       }
     }
   }
@@ -191,7 +192,14 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
       )
       "disconnect" -> disconnect(result)
       "write" -> write(result, call.argument<String>("message")!!)
-      "writeBytes" -> writeBytes(result, call.argument<List<Int>>("message")!!)
+      "writeBytes" -> {
+          val byteArray = call.arguments as? ByteArray
+          if (byteArray != null) {
+              writeBytes(result, byteArray)
+          } else {
+              result.error("invalid_args", "Expected ByteArray as argument", null)
+          }
+      }
       else -> result.notImplemented()
     }
   }
@@ -206,14 +214,13 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
     }
   }
 
-  private fun writeBytes(result: Result, bytes: List<Int>) {
+  private fun writeBytes(result: Result, message: ByteArray) {
     Log.i("write_handle", "inside write handle")
     if (thread != null) {
-      val byteArray = ByteArray(bytes.size) { i -> bytes[i].toByte() }
-      thread!!.write(byteArray)
-      result.success(true)
+        thread!!.write(message)
+        result.success(true)
     } else {
-      result.error("write_impossible", "could not send message to unconnected device", null)
+        result.error("write_impossible", "could not send message to unconnected device", null)
     }
   }
 
