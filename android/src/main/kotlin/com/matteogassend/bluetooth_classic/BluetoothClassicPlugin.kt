@@ -232,60 +232,109 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
   }
 
   private fun connect(result: Result, deviceId: String, serviceUuid: String) {
+    Thread {
+      internalConnect(result, deviceId, serviceUuid)
+    }.start()
+  }
+
+  private fun internalConnect(result: Result, deviceId: String, serviceUuid: String) {
     try {
       publishBluetoothStatus(1)
-      device = ba.getRemoteDevice(deviceId)
-      android.util.Log.i("Bluetooth Connection", "device found")
-      assert(device != null)
-      val SERIAL_UUID: UUID = UUID.fromString(serviceUuid)
-      try {
-        socket = device?.createRfcommSocketToServiceRecord(SERIAL_UUID)
+
+      val device = ba.getRemoteDevice(deviceId)
+      val SERIAL_UUID = UUID.fromString(serviceUuid)
+
+      var socket: BluetoothSocket? = try {
+        device.createRfcommSocketToServiceRecord(SERIAL_UUID)
       } catch (e: Exception) {
-        Log.e("", "Error creating socket")
+        null
       }
 
       try {
         socket?.connect()
-        android.util.Log.i("Bluetooth Connection", "socket connected")
-        Log.e("", "Connected")
       } catch (e: IOException) {
-        try {
-          android.util.Log.i("Bluetooth Connection", "trying fallback...")
-
-          socket = device?.let {
-            val method = it.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-            method.invoke(it, 1) as? BluetoothSocket
-          }
-//            .getMethod("createRfcommSocket", arrayOf<Class>(Int::class.javaPrimitiveType))
-//            .invoke(device, 1) as BluetoothSocket
-          socket?.connect()
-          android.util.Log.i("Bluetooth Connection", "socket connected alternative")
-        } catch (e2: Exception) {
-          android.util.Log.i("Bluetooth Connection", "Couldn't establish Bluetooth connection!")
+        socket = try {
+          val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+          method.invoke(device, 1) as? BluetoothSocket
+        } catch (_: Exception) {
+          null
         }
+        socket?.connect()
       }
 
-//      android.util.Log.i("Bluetooth Connection", "device found")
-//      assert(device != null)
-//      socket = device?.getClass().getMethod("createRfcommSocket", new Class[] {int.class}).invoke(device, 1)//.createRfcommSocketToServiceRecord(UUID.fromString(serviceUuid))
-//      android.util.Log.i("Bluetooth Connection", "rfcommsocket found")
-//      assert(socket != null)
-//      socket?.connect()
-      android.util.Log.i("Bluetooth Connection", "socket connected")
+      // SUCCESS
       thread = ConnectedThread(socket!!)
-      android.util.Log.i("Bluetooth Connection", "thread created")
-      assert(thread != null)
       thread!!.start()
-      android.util.Log.i("Bluetooth Connection", "thread running")
-      result.success(true)
-      publishBluetoothStatus(2)
+
+      Handler(Looper.getMainLooper()).post {
+        result.success(true)
+        publishBluetoothStatus(2)
+      }
 
     } catch (e: IOException) {
-      android.util.Log.e("Bluetooth Connection", "connection failed", e)
-      publishBluetoothStatus(0)
-      result.error("connection_failed", "could not connect to device $deviceId", null)
+      Handler(Looper.getMainLooper()).post {
+        publishBluetoothStatus(0)
+        result.error("connection_failed", "could not connect to device $deviceId", null)
+      }
     }
   }
+
+
+//  private fun connect(result: Result, deviceId: String, serviceUuid: String) {
+//    try {
+//      publishBluetoothStatus(1)
+//      device = ba.getRemoteDevice(deviceId)
+//      android.util.Log.i("Bluetooth Connection", "device found")
+//      assert(device != null)
+//      val SERIAL_UUID: UUID = UUID.fromString(serviceUuid)
+//      try {
+//        socket = device?.createRfcommSocketToServiceRecord(SERIAL_UUID)
+//      } catch (e: Exception) {
+//        Log.e("", "Error creating socket")
+//      }
+//
+//      try {
+//        socket?.connect()
+//        android.util.Log.i("Bluetooth Connection", "socket connected")
+//        Log.e("", "Connected")
+//      } catch (e: IOException) {
+//        try {
+//          android.util.Log.i("Bluetooth Connection", "trying fallback...")
+//
+//          socket = device?.let {
+//            val method = it.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+//            method.invoke(it, 1) as? BluetoothSocket
+//          }
+////            .getMethod("createRfcommSocket", arrayOf<Class>(Int::class.javaPrimitiveType))
+////            .invoke(device, 1) as BluetoothSocket
+//          socket?.connect()
+//          android.util.Log.i("Bluetooth Connection", "socket connected alternative")
+//        } catch (e2: Exception) {
+//          android.util.Log.i("Bluetooth Connection", "Couldn't establish Bluetooth connection!")
+//        }
+//      }
+//
+////      android.util.Log.i("Bluetooth Connection", "device found")
+////      assert(device != null)
+////      socket = device?.getClass().getMethod("createRfcommSocket", new Class[] {int.class}).invoke(device, 1)//.createRfcommSocketToServiceRecord(UUID.fromString(serviceUuid))
+////      android.util.Log.i("Bluetooth Connection", "rfcommsocket found")
+////      assert(socket != null)
+////      socket?.connect()
+//      android.util.Log.i("Bluetooth Connection", "socket connected")
+//      thread = ConnectedThread(socket!!)
+//      android.util.Log.i("Bluetooth Connection", "thread created")
+//      assert(thread != null)
+//      thread!!.start()
+//      android.util.Log.i("Bluetooth Connection", "thread running")
+//      result.success(true)
+//      publishBluetoothStatus(2)
+//
+//    } catch (e: IOException) {
+//      android.util.Log.e("Bluetooth Connection", "connection failed", e)
+//      publishBluetoothStatus(0)
+//      result.error("connection_failed", "could not connect to device $deviceId", null)
+//    }
+//  }
 
   private fun startScan(result: Result) {
     Log.i("start_scan", "scan started")
