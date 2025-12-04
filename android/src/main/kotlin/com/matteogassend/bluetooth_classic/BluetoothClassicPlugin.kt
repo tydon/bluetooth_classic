@@ -32,6 +32,8 @@ import io.flutter.plugin.common.PluginRegistry
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 /** BluetoothClassicPlugin */
 class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.RequestPermissionsResultListener, ActivityAware {
@@ -56,7 +58,7 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
   private var thread: ConnectedThread ?= null
   private var socket: BluetoothSocket ?= null
   private var device: BluetoothDevice ?= null
-
+  private val backgroundExecutor: ExecutorService = Executors.newSingleThreadExecutor()
 
   private inner class ConnectedThread(socket: BluetoothSocket): Thread() {
 
@@ -96,7 +98,7 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
       } catch (e: IOException) {
         readStream = false
         android.util.Log.e("Bluetooth Write", "could not send data to other device", e)
-        Handler(Looper.getMainLooper()).post { publishBluetoothStatus(0) }
+        Handler(looper).post { publishBluetoothStatus(0) }
       }
     }
   }
@@ -129,16 +131,25 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
   }
 
   private fun publishBluetoothData(data: ByteArray) {
-    bluetoothReadChannelSink?.success(data)
+    Handler(Looper.getMainLooper()).post {
+      bluetoothReadChannelSink?.success(data)
+    }
   }
+
   private fun publishBluetoothStatus(status: Int) {
     android.util.Log.i("Bluetooth Device Status", "Status updated to $status")
-    bluetoothStatusChannelSink?.success(status)
+    Handler(Looper.getMainLooper()).post {
+      bluetoothStatusChannelSink?.success(status)
+    }
+    android.util.Log.i("Bluetooth_classic", "Status published to flutter: $status")
   }
 
   private fun publishBluetoothDevice(device: BluetoothDevice) {
-    Log.i("device_discovery", device.address)
-    bluetoothDeviceChannelSink?.success(hashMapOf("address" to device.address, "name" to device.name))
+    Handler(Looper.getMainLooper()).post {
+      bluetoothDeviceChannelSink?.success(
+        hashMapOf("address" to device.address, "name" to device.name)
+      )
+    }
   }
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
@@ -225,63 +236,79 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
   }
 
   private fun disconnect(result: Result) {
-    device = null
-    android.util.Log.i("Bluetooth Disconnect", "device removed from memory")
-    thread!!.interrupt()
-    android.util.Log.i("Bluetooth Disconnect", "read thread closed")
-    thread = null
-    android.util.Log.i("Bluetooth Disconnect", "read thread freed")
-    socket!!.close()
-    android.util.Log.i("Bluetooth Disconnect", "rfcomm socket closed")
-    publishBluetoothStatus(0)
-    android.util.Log.i("Bluetooth Disconnect", "disconnected")
-    result.success(true)
+    backgroundExecutor.execute {
+      try {
+        device = null
+        android.util.Log.i("Bluetooth Disconnect", "device removed from memory")
+
+        thread?.interrupt()
+        android.util.Log.i("Bluetooth Disconnect", "read thread closed")
+        thread = null
+        android.util.Log.i("Bluetooth Disconnect", "read thread freed")
+
+        socket?.close()
+        android.util.Log.i("Bluetooth Disconnect", "rfcomm socket closed")
+
+        Handler(Looper.getMainLooper()).post {
+          publishBluetoothStatus(0)
+          android.util.Log.i("Bluetooth Disconnect", "disconnected")
+          result.success(true)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          android.util.Log.e("Bluetooth Disconnect", "disconnect error", e)
+          result.error("disconnect_error", e.message, null)
+        }
+      }
+    }
   }
+
+//  private fun connect(result: Result, deviceId: String, serviceUuid: String) {
+//    Thread {
+//      internalConnect(result, deviceId, serviceUuid)
+//    }.start()
+//  }
 
   private fun connect(result: Result, deviceId: String, serviceUuid: String) {
-    Thread {
-      internalConnect(result, deviceId, serviceUuid)
-    }.start()
-  }
-
-  private fun internalConnect(result: Result, deviceId: String, serviceUuid: String) {
-    try {
-      publishBluetoothStatus(1)
-
-      val device = ba.getRemoteDevice(deviceId)
-      val SERIAL_UUID = UUID.fromString(serviceUuid)
-
-      var socket: BluetoothSocket? = try {
-        device.createRfcommSocketToServiceRecord(SERIAL_UUID)
-      } catch (e: Exception) {
-        null
-      }
-
+    backgroundExecutor.execute {
       try {
-        socket?.connect()
-      } catch (e: IOException) {
-        socket = try {
-          val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
-          method.invoke(device, 1) as? BluetoothSocket
-        } catch (_: Exception) {
+        publishBluetoothStatus(1)
+
+        val device = ba.getRemoteDevice(deviceId)
+        val SERIAL_UUID = UUID.fromString(serviceUuid)
+
+        var socket: BluetoothSocket? = try {
+          device.createRfcommSocketToServiceRecord(SERIAL_UUID)
+        } catch (e: Exception) {
           null
         }
-        socket?.connect()
-      }
 
-      // SUCCESS
-      thread = ConnectedThread(socket!!)
-      thread!!.start()
+        try {
+          socket?.connect()
+        } catch (e: IOException) {
+          socket = try {
+            val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+            method.invoke(device, 1) as? BluetoothSocket
+          } catch (_: Exception) {
+            null
+          }
+          socket?.connect()
+        }
 
-      Handler(Looper.getMainLooper()).post {
-        result.success(true)
-        publishBluetoothStatus(2)
-      }
+        // SUCCESS
+        thread = ConnectedThread(socket!!)
+        thread!!.start()
 
-    } catch (e: IOException) {
-      Handler(Looper.getMainLooper()).post {
-        publishBluetoothStatus(0)
-        result.error("connection_failed", "could not connect to device $deviceId", null)
+        Handler(Looper.getMainLooper()).post {
+          result.success(true)
+          publishBluetoothStatus(2)
+        }
+
+      } catch (e: IOException) {
+        Handler(Looper.getMainLooper()).post {
+          publishBluetoothStatus(0)
+          result.error("connection_failed", "could not connect to device $deviceId", null)
+        }
       }
     }
   }
@@ -344,16 +371,36 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
 //  }
 
   private fun startScan(result: Result) {
-    Log.i("start_scan", "scan started")
-    application.registerReceiver(receiver, IntentFilter(BluetoothDevice.ACTION_FOUND))
-    ba.startDiscovery()
-    result.success(true)
+    backgroundExecutor.execute {
+      try {
+        Log.i("start_scan", "scan started")
+        Handler(Looper.getMainLooper()).post {
+          application.registerReceiver(receiver, IntentFilter(BluetoothDevice.ACTION_FOUND))
+          ba.startDiscovery()
+          result.success(true)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("scan_error", "Failed to start scan: ${e.message}", null)
+        }
+      }
+    }
   }
 
   private  fun stopScan(result: Result) {
-    Log.i("stop_scan", "scan stopped")
-    ba.cancelDiscovery()
-    result.success(true)
+    backgroundExecutor.execute {
+      try {
+        Log.i("stop_scan", "scan stopped")
+        Handler(Looper.getMainLooper()).post {
+          ba.cancelDiscovery()
+          result.success(true)
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("stop_scan_error", "Failed to stop scan: ${e.message}", null)
+        }
+      }
+    }
   }
 
   private fun initPermissions(result: Result) {
@@ -430,19 +477,31 @@ class BluetoothClassicPlugin: FlutterPlugin, MethodCallHandler, PluginRegistry.R
 
   @SuppressLint("MissingPermission")
   fun getDevices(result: Result) {
-    val devices = ba.bondedDevices
-    val list = mutableListOf<HashMap<String, String>>()
+    backgroundExecutor.execute {
+      try {
+        val devices = ba.bondedDevices
+        val list = mutableListOf<HashMap<String, String>>()
 
-    for (data in devices) {
-      val hash = HashMap<String, String>()
-      hash["address"] = data.address
-      hash["name"] = data.name
-      list.add(hash)
+        for (data in devices) {
+          val hash = HashMap<String, String>()
+          hash["address"] = data.address
+          hash["name"] = data.name
+          list.add(hash)
+        }
+
+        Handler(Looper.getMainLooper()).post {
+          result.success(list.toList())
+        }
+      } catch (e: Exception) {
+        Handler(Looper.getMainLooper()).post {
+          result.error("get_devices_error", "Failed to get devices: ${e.message}", null)
+        }
+      }
     }
-    result.success(list.toList())
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    backgroundExecutor.shutdown()
     channel.setMethodCallHandler(null)
   }
 }
